@@ -128,6 +128,9 @@ function calistir(fonksiyonAdi, event) {
     uyariPenceresi("Bu butonu kullanma yetkiniz yok.", event);
     return;
   }
+  // GEÇİCİ TEŞHİS: Outlook'un gördüğü e-posta adresini gösterir (sorun çözülünce bu satırı silin)
+  bildir(Office.context.mailbox.item, "Teşhis - algılanan adres: " +
+    Office.context.mailbox.userProfile.emailAddress + " | sürüm: v6");
   metinEkle(METINLER[fonksiyonAdi], event);
 }
 
