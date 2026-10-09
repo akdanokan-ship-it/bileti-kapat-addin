@@ -1,13 +1,18 @@
 /* global Office */
 
-const METIN = "Bileti kapat";
-const EKLENECEK_HTML =
-  '<p style="margin:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;"><b>' +
-  METIN +
-  "</b></p><br>";
+// Menüdeki seçenekler: fonksiyon adı -> maile eklenecek metin
+const METINLER = {
+  biletiKapat: "Bileti kapat",
+  biletiKapatma: "Bileti kapatma"
+};
 
-// Yanıtlarda alıntılanan eski yazışmanın başladığı yeri gösteren işaretler.
-// Metin, ilk bulunan işaretin hemen ÜSTÜNE, yani sizin yazdığınız kısmın sonuna eklenir.
+// Daha önce eklenmiş metni bulmak için ("Bileti kapat", "Bileti kapatma"nın içinde geçtiği için ayrı kontrol)
+const MEVCUT_KONTROL = [
+  { metin: "Bileti kapatma", desen: /Bileti kapatma/i },
+  { metin: "Bileti kapat", desen: /Bileti kapat(?!ma)/i }
+];
+
+// Yanıtlarda alıntılanan eski yazışmanın başladığı yeri gösteren işaretler
 const ALINTI_ISARETLERI = [
   /<div[^>]*id=["']?appendonsend["']?[^>]*>/i,                       // Outlook Web / yeni Outlook
   /<div[^>]*id=["']?divRplyFwdMsg["']?[^>]*>/i,                      // Outlook Web / yeni Outlook
@@ -26,65 +31,74 @@ function alintiBaslangici(html) {
   return enKucuk;
 }
 
-function bildir(item, mesaj, tip) {
+function bildir(item, mesaj, hata) {
   item.notificationMessages.replaceAsync("biletiKapat", {
-    type: tip || Office.MailboxEnums.ItemNotificationMessageType.InformationalMessage,
+    type: hata
+      ? Office.MailboxEnums.ItemNotificationMessageType.ErrorMessage
+      : Office.MailboxEnums.ItemNotificationMessageType.InformationalMessage,
     message: mesaj,
     icon: "Icon.16",
     persistent: false
   });
 }
 
-function biletiKapat(event) {
+function metinEkle(metin, event) {
   const item = Office.context.mailbox.item;
+  const eklenecekHtml =
+    '<p style="margin:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;"><b>' +
+    metin + "</b></p><br>";
 
   item.body.getAsync(Office.CoercionType.Html, (sonuc) => {
     if (sonuc.status !== Office.AsyncResultStatus.Succeeded) {
-      bildir(item, "Mail gövdesi okunamadı: " + sonuc.error.message,
-        Office.MailboxEnums.ItemNotificationMessageType.ErrorMessage);
+      bildir(item, "Mail gövdesi okunamadı: " + sonuc.error.message, true);
       event.completed();
       return;
     }
 
     const html = sonuc.value;
     const kesim = alintiBaslangici(html);
+    let yazilanKisim, yeniHtml;
 
-    // Yanıt değilse (alıntı yoksa) gövdenin en sonuna, </body> öncesine ekle
-    let yeniHtml;
-    let yazilanKisim;
     if (kesim >= 0) {
       yazilanKisim = html.substring(0, kesim);
-      yeniHtml = yazilanKisim + EKLENECEK_HTML + html.substring(kesim);
+      yeniHtml = yazilanKisim + eklenecekHtml + html.substring(kesim);
     } else {
       const bodyKapanis = html.search(/<\/body>/i);
       yazilanKisim = bodyKapanis >= 0 ? html.substring(0, bodyKapanis) : html;
       yeniHtml = bodyKapanis >= 0
-        ? yazilanKisim + EKLENECEK_HTML + html.substring(bodyKapanis)
-        : html + EKLENECEK_HTML;
+        ? yazilanKisim + eklenecekHtml + html.substring(bodyKapanis)
+        : html + eklenecekHtml;
     }
 
-    // Butona iki kez basılırsa tekrar eklemesin
-    if (yazilanKisim.replace(/<[^>]+>/g, "").includes(METIN)) {
-      bildir(item, "'" + METIN + "' zaten eklenmiş.");
-      event.completed();
-      return;
+    // Seçeneklerden biri zaten eklenmişse tekrar ekleme
+    const duzMetin = yazilanKisim.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ");
+    for (const k of MEVCUT_KONTROL) {
+      if (k.desen.test(duzMetin)) {
+        bildir(item, "'" + k.metin + "' zaten eklenmiş. Değiştirmek için önce mevcut metni silin.");
+        event.completed();
+        return;
+      }
     }
 
-    item.body.setAsync(yeniHtml, { coercionType: Office.CoercionType.Html }, (yazSonuc) => {
-      if (yazSonuc.status !== Office.AsyncResultStatus.Succeeded) {
-        bildir(item, "Metin eklenemedi: " + yazSonuc.error.message,
-          Office.MailboxEnums.ItemNotificationMessageType.ErrorMessage);
+    item.body.setAsync(yeniHtml, { coercionType: Office.CoercionType.Html }, (yaz) => {
+      if (yaz.status !== Office.AsyncResultStatus.Succeeded) {
+        bildir(item, "Metin eklenemedi: " + yaz.error.message, true);
       }
       event.completed();
     });
   });
 }
 
-// XML manifest'teki <FunctionName> ile eşleşmesi için global tanım
+function biletiKapat(event)   { metinEkle(METINLER.biletiKapat, event); }
+function biletiKapatma(event) { metinEkle(METINLER.biletiKapatma, event); }
+
+// XML manifest'teki <FunctionName> değerleriyle eşleşmesi için global tanım
 window.biletiKapat = biletiKapat;
+window.biletiKapatma = biletiKapatma;
 
 Office.onReady(() => {
   if (Office.actions && Office.actions.associate) {
     Office.actions.associate("biletiKapat", biletiKapat);
+    Office.actions.associate("biletiKapatma", biletiKapatma);
   }
 });
