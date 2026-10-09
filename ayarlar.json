@@ -1,0 +1,15 @@
+{
+  "secenekler": {
+    "kapat":    "Bileti kapat",
+    "kapatma":  "Bileti kapatma",
+    "secenek3": "Seçenek 3",
+    "secenek4": "Seçenek 4",
+    "secenek5": "Seçenek 5",
+    "secenek6": "Seçenek 6",
+    "secenek7": "Seçenek 7"
+  },
+  "varsayilan": ["kapat", "kapatma", "secenek3", "secenek4", "secenek5", "secenek6", "secenek7"],
+  "kullanicilar": {
+    "okan.akdan@atptech.com": ["kapat", "kapatma", "secenek5"]
+  }
+}

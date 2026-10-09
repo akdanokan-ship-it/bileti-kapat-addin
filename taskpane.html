@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilet</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    body { font-family: "Segoe UI", Calibri, Arial, sans-serif; margin: 0; padding: 14px; color: #242424; background: #fff; }
+    h1 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+    .liste { display: flex; flex-direction: column; gap: 8px; }
+    .secenek {
+      font: inherit; font-size: 14px; text-align: left; padding: 10px 12px; border-radius: 6px;
+      border: 1px solid #d1d1d1; background: #fafafa; cursor: pointer;
+    }
+    .secenek:hover { background: #ebf3fc; border-color: #0f6cbd; }
+    .secenek:disabled { opacity: .5; cursor: default; }
+    .durum { margin-top: 14px; font-size: 13px; min-height: 18px; }
+    .durum.ok { color: #107c10; }
+    .durum.hata { color: #c42b1c; }
+    .alt { margin-top: 20px; font-size: 11px; color: #707070; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>Eklenecek metni seçin</h1>
+  <div class="liste" id="liste">Yükleniyor…</div>
+  <div class="durum" id="durum"></div>
+  <div class="alt" id="alt"></div>
+
+  <script>
+    // Yanıtlarda alıntılanan eski yazışmanın başladığı yeri gösteren işaretler
+    const ALINTI_ISARETLERI = [
+      /<div[^>]*id=["']?appendonsend["']?[^>]*>/i,              // Outlook Web / yeni Outlook
+      /<div[^>]*id=["']?divRplyFwdMsg["']?[^>]*>/i,             // Outlook Web / yeni Outlook
+      /<hr[^>]*display:\s*inline-block[^>]*>/i,                 // Outlook Web ayraç çizgisi
+      /<div[^>]*border-top:\s*solid\s+#(E1E1E1|B5C4DF)[^>]*>/i, // Klasik Windows Outlook
+      /<div[^>]*class=["']?gmail_quote/i,                       // Gmail'den gelen yazışmalar
+      /<blockquote/i                                            // Genel alıntı bloğu
+    ];
+
+    let tumMetinler = [];
+
+    function durum(mesaj, tip) {
+      const el = document.getElementById("durum");
+      el.textContent = mesaj;
+      el.className = "durum " + (tip || "");
+    }
+
+    function kacis(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+    function alintiBaslangici(html) {
+      let enKucuk = -1;
+      for (const desen of ALINTI_ISARETLERI) {
+        const m = desen.exec(html);
+        if (m && (enKucuk === -1 || m.index < enKucuk)) enKucuk = m.index;
+      }
+      return enKucuk;
+    }
+
+    async function ayarlariYukle() {
+      const r = await fetch("ayarlar.json?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) throw new Error("ayarlar.json okunamadı (" + r.status + ")");
+      return r.json();
+    }
+
+    function metinEkle(metin, buton) {
+      const item = Office.context.mailbox.item;
+      const html = '<p style="margin:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;"><b>' +
+                   metin + "</b></p><br>";
+      buton.disabled = true;
+
+      item.body.getAsync(Office.CoercionType.Html, (sonuc) => {
+        if (sonuc.status !== Office.AsyncResultStatus.Succeeded) {
+          durum("Mail gövdesi okunamadı: " + sonuc.error.message, "hata");
+          buton.disabled = false;
+          return;
+        }
+        const govde = sonuc.value;
+        const kesim = alintiBaslangici(govde);
+        let yazilan, yeni;
+        if (kesim >= 0) {
+          yazilan = govde.substring(0, kesim);
+          yeni = yazilan + html + govde.substring(kesim);
+        } else {
+          const kapanis = govde.search(/<\/body>/i);
+          yazilan = kapanis >= 0 ? govde.substring(0, kapanis) : govde;
+          yeni = kapanis >= 0 ? yazilan + html + govde.substring(kapanis) : govde + html;
+        }
+
+        // Seçeneklerden biri zaten eklenmişse tekrar ekleme
+        const duz = yazilan.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ");
+        for (const m of tumMetinler) {
+          if (new RegExp(kacis(m) + "(?![\\p{L}\\p{N}])", "iu").test(duz)) {
+            durum("'" + m + "' zaten eklenmiş. Değiştirmek için önce mevcut metni silin.", "hata");
+            buton.disabled = false;
+            return;
+          }
+        }
+
+        item.body.setAsync(yeni, { coercionType: Office.CoercionType.Html }, (yaz) => {
+          if (yaz.status !== Office.AsyncResultStatus.Succeeded) {
+            durum("Metin eklenemedi: " + yaz.error.message, "hata");
+          } else {
+            durum("'" + metin + "' eklendi.", "ok");
+          }
+          buton.disabled = false;
+        });
+      });
+    }
+
+    Office.onReady(async () => {
+      const liste = document.getElementById("liste");
+      const eposta = (Office.context.mailbox.userProfile.emailAddress || "").toLowerCase();
+      document.getElementById("alt").textContent = "Kullanıcı: " + eposta;
+
+      try {
+        const ayar = await ayarlariYukle();
+        tumMetinler = Object.values(ayar.secenekler);
+
+        // Kullanıcıya özel liste varsa o, yoksa varsayılan liste
+        const kullanicilar = {};
+        for (const k in (ayar.kullanicilar || {})) kullanicilar[k.toLowerCase()] = ayar.kullanicilar[k];
+        const izinli = kullanicilar[eposta] || ayar.varsayilan || [];
+
+        liste.innerHTML = "";
+        izinli.forEach((anahtar) => {
+          const metin = ayar.secenekler[anahtar];
+          if (!metin) return;
+          const b = document.createElement("button");
+          b.className = "secenek";
+          b.textContent = metin;
+          b.onclick = () => metinEkle(metin, b);
+          liste.appendChild(b);
+        });
+        if (!liste.children.length) liste.textContent = "Size tanımlı bir seçenek yok.";
+      } catch (e) {
+        liste.textContent = "";
+        durum(e.message, "hata");
+      }
+    });
+  </script>
+</body>
+</html>
