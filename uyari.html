@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Uyarı</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", Calibri, Arial, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      background: #ffffff; color: #242424;
+    }
+    .kutu { text-align: center; padding: 20px; }
+    .ikon {
+      width: 48px; height: 48px; border-radius: 50%; margin: 0 auto 14px;
+      background: #c42b1c; color: #fff; font-size: 30px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mesaj { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+    button {
+      font: inherit; font-size: 14px; padding: 8px 32px; border: 0; border-radius: 4px;
+      background: #0f6cbd; color: #fff; cursor: pointer;
+    }
+    button:hover { background: #115ea3; }
+  </style>
+</head>
+<body>
+  <div class="kutu">
+    <div class="ikon">!</div>
+    <div class="mesaj" id="mesaj">Bu butonu kullanma yetkiniz yok.</div>
+    <button id="tamam">Tamam</button>
+  </div>
+  <script>
+    const p = new URLSearchParams(location.search).get("mesaj");
+    if (p) document.getElementById("mesaj").textContent = p;
+    Office.onReady(() => {
+      document.getElementById("tamam").onclick = () => Office.context.ui.messageParent("tamam");
+    });
+  </script>
+</body>
+</html>
