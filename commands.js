@@ -100,10 +100,32 @@ function metinEkle(metin, event) {
   });
 }
 
+// Ekranın ortasında "Tamam" butonlu uyarı penceresi açar
+function uyariPenceresi(mesaj, event) {
+  const adres = new URL("uyari.html", window.location.href);
+  adres.searchParams.set("mesaj", mesaj);
+
+  Office.context.ui.displayDialogAsync(
+    adres.toString(),
+    { height: 30, width: 30, displayInIframe: true },
+    (sonuc) => {
+      if (sonuc.status !== Office.AsyncResultStatus.Succeeded) {
+        // Pencere açılamazsa şerit uyarıya geri dön
+        bildir(Office.context.mailbox.item, mesaj, true);
+        event.completed();
+        return;
+      }
+      const pencere = sonuc.value;
+      const kapat = () => { try { pencere.close(); } catch (e) {} event.completed(); };
+      pencere.addEventHandler(Office.EventType.DialogMessageReceived, kapat);
+      pencere.addEventHandler(Office.EventType.DialogEventReceived, () => event.completed());
+    }
+  );
+}
+
 function calistir(fonksiyonAdi, event) {
   if (engelliMi(fonksiyonAdi)) {
-    bildir(Office.context.mailbox.item, "Bu butonu kullanma yetkiniz yok.", true);
-    event.completed();
+    uyariPenceresi("Bu butonu kullanma yetkiniz yok.", event);
     return;
   }
   metinEkle(METINLER[fonksiyonAdi], event);
