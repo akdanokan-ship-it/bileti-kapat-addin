@@ -10,6 +10,6 @@
   },
   "varsayilan": ["kapat", "kapatma", "secenek3", "secenek4", "secenek5", "secenek6", "secenek7"],
   "kullanicilar": {
-    "okan.akdan@atptech.com": ["kapat", "kapatma", "secenek5","Seçenek 7"]
+    "okan.akdan@atptech.com": ["kapat", "kapatma", "secenek5","secenek7"]
   }
 }
