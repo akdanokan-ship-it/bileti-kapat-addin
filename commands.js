@@ -6,6 +6,17 @@ const METINLER = {
   biletiKapatma: "Bileti kapatma"
 };
 
+// Butonu kullanamayacak kişiler: fonksiyon adı -> engellenen e-posta adresleri (küçük harfle)
+const ENGELLI_KULLANICILAR = {
+  biletiKapat: ["okan.akdan@atptech.com"],
+  biletiKapatma: []
+};
+
+function engelliMi(fonksiyonAdi) {
+  const eposta = (Office.context.mailbox.userProfile.emailAddress || "").toLowerCase();
+  return (ENGELLI_KULLANICILAR[fonksiyonAdi] || []).includes(eposta);
+}
+
 // Daha önce eklenmiş metni bulmak için ("Bileti kapat", "Bileti kapatma"nın içinde geçtiği için ayrı kontrol)
 const MEVCUT_KONTROL = [
   { metin: "Bileti kapatma", desen: /Bileti kapatma/i },
@@ -89,8 +100,17 @@ function metinEkle(metin, event) {
   });
 }
 
-function biletiKapat(event)   { metinEkle(METINLER.biletiKapat, event); }
-function biletiKapatma(event) { metinEkle(METINLER.biletiKapatma, event); }
+function calistir(fonksiyonAdi, event) {
+  if (engelliMi(fonksiyonAdi)) {
+    bildir(Office.context.mailbox.item, "Bu butonu kullanma yetkiniz yok.", true);
+    event.completed();
+    return;
+  }
+  metinEkle(METINLER[fonksiyonAdi], event);
+}
+
+function biletiKapat(event)   { calistir("biletiKapat", event); }
+function biletiKapatma(event) { calistir("biletiKapatma", event); }
 
 // XML manifest'teki <FunctionName> değerleriyle eşleşmesi için global tanım
 window.biletiKapat = biletiKapat;
