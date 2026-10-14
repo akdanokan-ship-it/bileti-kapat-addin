@@ -2,10 +2,10 @@
   "flowUrl": "https://d050619d3238e22d9bb9883a1557ba.07.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/04/workflows/203ad7ad0c1c49c5b86ed1f9a6f6c489/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=iygkhAHrf6etgdBIiUjOfapXT27mWjrhFyI6mXfWB0Q",
   "secenekler": {
     "kapat": "Bileti kapat",
-    "kapatma": "Bileti kapatma",
+    "kapatma": "YurtDışı Otel Kapat",
     "secenek3": "Seçenek 3",
     "secenek4": "Seçenek 4",
-    "secenek5": "Seçenek 5",
+    "secenek5": "Mice Kapat",
     "secenek6": "Seçenek 6",
     "secenek7": "Seçenek 7"
   },
