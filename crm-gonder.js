@@ -4,11 +4,23 @@
 
 var AYAR_ADRESI = "ayarlar.json";
 
-function guvenli(fn) {
+// Her Office çağrısı en fazla 5 sn bekler; cevap gelmezse null ile devam eder
+function guvenli(fn, ad) {
   return new Promise(function (coz) {
-    try { fn(function (r) { coz(r && r.status === Office.AsyncResultStatus.Succeeded ? r.value : null); }); }
-    catch (e) { coz(null); }
+    var bitti = false;
+    var sure = setTimeout(function () { if (!bitti) { bitti = true; ZAMAN_ASIMI.push(ad || "?"); coz(null); } }, 5000);
+    try {
+      fn(function (r) {
+        if (bitti) return; bitti = true; clearTimeout(sure);
+        coz(r && r.status === Office.AsyncResultStatus.Succeeded ? r.value : null);
+      });
+    } catch (e) { if (!bitti) { bitti = true; clearTimeout(sure); coz(null); } }
   });
+}
+var ZAMAN_ASIMI = [];
+
+function zamanAsimli(promise, ms, ad) {
+  return Promise.race([promise, new Promise(function (_, red) { setTimeout(function () { red(new Error(ad + " " + (ms / 1000) + " sn içinde cevap vermedi")); }, ms); })]);
 }
 
 function kisi(r) { return r ? { ad: r.displayName, eposta: r.emailAddress } : null; }
@@ -28,10 +40,10 @@ function bildir(mesaj, hata) {
 function mailBilgileriniTopla() {
   var item = Office.context.mailbox.item;
   return Promise.all([
-    guvenli(function (cb) { item.body.getAsync(Office.CoercionType.Text, cb); }),
-    guvenli(function (cb) { item.body.getAsync(Office.CoercionType.Html, cb); }),
-    item.getAllInternetHeadersAsync ? guvenli(function (cb) { item.getAllInternetHeadersAsync(cb); }) : null,
-    item.categories ? guvenli(function (cb) { item.categories.getAsync(cb); }) : null
+    guvenli(function (cb) { item.body.getAsync(Office.CoercionType.Text, cb); }, "gövde-metin"),
+    guvenli(function (cb) { item.body.getAsync(Office.CoercionType.Html, cb); }, "gövde-html"),
+    item.getAllInternetHeadersAsync ? guvenli(function (cb) { item.getAllInternetHeadersAsync(cb); }, "başlıklar") : null,
+    item.categories ? guvenli(function (cb) { item.categories.getAsync(cb); }, "kategoriler") : null
   ]).then(function (s) {
     var up = Office.context.mailbox.userProfile;
     var diag = Office.context.mailbox.diagnostics || {};
@@ -68,13 +80,18 @@ function mailBilgileriniTopla() {
 }
 
 function crmeGonder(event) {
-  bildir("CRM'e gönderiliyor…");
-  fetch(AYAR_ADRESI + "?t=" + Date.now(), { cache: "no-store" })
+  ZAMAN_ASIMI = [];
+  bildir("1/4 Ayarlar okunuyor…");
+  zamanAsimli(fetch(AYAR_ADRESI + "?t=" + Date.now(), { cache: "no-store" }), 10000, "ayarlar.json")
     .then(function (r) { return r.json(); })
     .then(function (ayar) {
       if (!ayar.flowUrl || ayar.flowUrl.indexOf("http") !== 0) throw new Error("ayarlar.json içinde flowUrl tanımlı değil");
+      bildir("2/4 Mail bilgileri toplanıyor…");
       return mailBilgileriniTopla().then(function (veri) {
-        return fetch(ayar.flowUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(veri) });
+        var govde = JSON.stringify(veri);
+        bildir("3/4 Flow'a gönderiliyor (" + Math.round(govde.length / 1024) + " KB)" +
+               (ZAMAN_ASIMI.length ? " | yanıtsız: " + ZAMAN_ASIMI.join(",") : "") + "…");
+        return zamanAsimli(fetch(ayar.flowUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: govde }), 30000, "Flow");
       });
     })
     .then(function (r) {
@@ -82,7 +99,7 @@ function crmeGonder(event) {
       return r.json().catch(function () { return {}; });
     })
     .then(function (cevap) {
-      bildir("CRM'e gönderildi." + (cevap && cevap.kayitId ? " Kayıt: " + cevap.kayitId : ""));
+      bildir("4/4 CRM'e gönderildi." + (cevap && cevap.kayitId ? " Kayıt: " + cevap.kayitId : ""));
       event.completed();
     })
     .catch(function (e) {
